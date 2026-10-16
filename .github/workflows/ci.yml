@@ -1,0 +1,193 @@
+name: CI
+
+# Jobs that run project code (restore, build, test) get a read-only token. Only the report job, which runs no
+# project code, can write checks and PR comments.
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'SGuard.AspNetCore.AotSmoke/**'
+      - '.github/workflows/**'
+      - 'global.json'
+      - 'SGuard.AspNetCore.sln'
+      - '**/*.csproj'
+      - 'coverlet.runsettings'
+      - 'Directory.Build.props'
+      - '**/packages.lock.json'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'SGuard.AspNetCore.AotSmoke/**'
+      - '.github/workflows/**'
+      - 'global.json'
+      - 'SGuard.AspNetCore.sln'
+      - '**/*.csproj'
+      - 'coverlet.runsettings'
+      - 'Directory.Build.props'
+      - '**/packages.lock.json'
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup .NET (8/9/10)
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+
+      - name: Cache NuGet
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      # Directory.Build.props enables locked mode and fails on vulnerable packages in CI.
+      - name: Restore
+        run: dotnet restore SGuard.AspNetCore.sln --locked-mode
+
+      - name: Build
+        run: dotnet build SGuard.AspNetCore.sln --configuration Release --no-restore
+
+      # Runs package validation, which otherwise only runs at release time.
+      - name: Pack
+        run: dotnet pack src/SGuard.AspNetCore/SGuard.AspNetCore.csproj --configuration Release --no-build --output dist
+
+      - name: Test (TRX + Coverage)
+        run: >
+          dotnet test SGuard.AspNetCore.sln
+          --configuration Release
+          --no-build
+          --settings coverlet.runsettings
+          --collect:"XPlat Code Coverage"
+          --logger "trx;LogFilePrefix=test_results"
+
+      - name: Generate Coverage Summary + HTML
+        uses: danielpalme/ReportGenerator-GitHub-Action@d3ebf1f760f7d8ab92cc44d9bcfee7ad73722a31 # v5.5.11
+        with:
+          reports: 'tests/SGuard.AspNetCore.Tests/TestResults/*/coverage.cobertura.xml' # the In/ copy written for the TRX logger is the same data
+          targetdir: 'coveragereport'
+          reporttypes: 'MarkdownSummary;Html'
+          assemblyfilters: '+SGuard.AspNetCore;-*Tests'
+          classfilters: '-*.Generated*'
+          tag: '${{ github.run_number }}'
+
+      - name: Append coverage table to Job Summary
+        if: always()
+        run: |
+          echo "## Code Coverage" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f coveragereport/Summary.md ]; then
+            cat coveragereport/Summary.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "_Coverage summary not generated._" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload Artifacts
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-report-html
+          path: coveragereport
+
+      - name: Upload raw test/coverage files
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-and-coverage-raw
+          path: |
+            **/TestResults/**/*.trx
+            **/TestResults/**/coverage*.xml
+            **/TestResults/**/*.xml
+
+  # Runs the trimming and Native AOT analyzers on SGuard.AspNetCore, then publishes SGuard.AspNetCore.AotSmoke, a minimal
+  # API app, with Native AOT and runs it.
+  # Their packages follow the installed SDK and can't be pinned in the lock files, so this job restores without locked
+  # mode; it only builds and runs, and publishes nothing.
+  aot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install the Native AOT toolchain
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang zlib1g-dev
+
+      - name: Trimming and AOT analyzers
+        run: dotnet build src/SGuard.AspNetCore/SGuard.AspNetCore.csproj --configuration Release -p:SGuardAotAnalysis=true -p:TreatWarningsAsErrors=true -p:RestoreLockedMode=false
+
+      - name: Publish the smoke test with Native AOT
+        run: dotnet publish SGuard.AspNetCore.AotSmoke --configuration Release --runtime linux-x64 -p:RestoreLockedMode=false --output aot
+
+      - name: Run the smoke test
+        run: ./aot/SGuard.AspNetCore.AotSmoke
+
+  report:
+    needs: build-and-test
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+
+    steps:
+      - name: Download raw test/coverage files
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: test-and-coverage-raw
+          path: raw
+
+      - name: Download coverage report
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: coverage-report-html
+          path: coveragereport
+
+      - name: Publish Unit Test Results (TRX)
+        uses: EnricoMi/publish-unit-test-result-action@d0a4676d0e0b938bc201470d88276b7c74c712b3 # v2.24.0
+        with:
+          files: 'raw/**/*.trx'
+          check_name: 'Test Results'
+          comment_mode: failures
+
+      - name: Post sticky PR comment (Coverage)
+        if: github.event_name == 'pull_request' && hashFiles('coveragereport/Summary.md') != ''
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        with:
+          header: sguard-aspnetcore-coverage
+          path: coveragereport/Summary.md

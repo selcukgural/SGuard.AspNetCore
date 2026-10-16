@@ -1,0 +1,29 @@
+version: 2
+updates:
+  - package-ecosystem: "nuget"
+    directories:
+      - "/src/SGuard.AspNetCore"
+      - "/tests/SGuard.AspNetCore.Tests"
+    schedule:
+      interval: "weekly"
+    groups:
+      nuget:
+        patterns: ["*"]
+    ignore:
+      # TestHost ships with each ASP.NET Core version: the tests reference the 8.x, 9.x and 10.x line for their target
+      # framework, so only patch updates apply.
+      - dependency-name: "Microsoft.AspNetCore.TestHost"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+
+  - package-ecosystem: "dotnet-sdk"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns: ["*"]

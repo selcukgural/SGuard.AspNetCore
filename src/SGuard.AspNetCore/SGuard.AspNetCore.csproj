@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+        <PackageId>SGuard.AspNetCore</PackageId>
+        <PackageVersion>1.0.0</PackageVersion>
+        <AssemblyVersion>1.0.0</AssemblyVersion>
+        <FileVersion>1.0.0</FileVersion>
+        <Title>SGuard.AspNetCore</Title>
+        <Description>Returns SGuard guard failures from ASP.NET Core as 400 Bad Request validation problem details (RFC 9457), keyed by the failing member and with messages that don't expose values or code. Works with minimal APIs and controllers through the built-in exception handler. Targets net8.0/net9.0/net10.0.</Description>
+        <PackageTags>sguard;guard;aspnetcore;problemdetails;validation;exception-handler;dotnet;csharp</PackageTags>
+        <Authors>Selçuk Güral</Authors>
+        <Company>Selçuk Güral</Company>
+        <PackageProjectUrl>https://github.com/selcukgural/SGuard.AspNetCore</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/selcukgural/SGuard.AspNetCore</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageIcon>icon.png</PackageIcon>
+        <PackageReleaseNotes>See https://github.com/selcukgural/SGuard.AspNetCore/blob/main/Changelog.md</PackageReleaseNotes>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <!-- Checks the package's API across target frameworks on every pack. After the first release, set
+             PackageValidationBaselineVersion so a breaking change can't ship by accident. -->
+        <EnablePackageValidation>true</EnablePackageValidation>
+    </PropertyGroup>
+
+    <!-- Trimming and Native AOT. The analyzers ship in a package whose version follows the installed SDK and so can't be
+         pinned in packages.lock.json: the CI "aot" job runs them with -p:SGuardAotAnalysis=true. -->
+    <PropertyGroup Condition="'$(SGuardAotAnalysis)' == 'true'">
+        <IsAotCompatible>true</IsAotCompatible>
+    </PropertyGroup>
+    <ItemGroup>
+        <AssemblyMetadata Include="IsTrimmable" Value="True" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- PrivateAssets="none": by default NuGet doesn't pass a dependency's analyzers on, so apps that get SGuard
+             through this package would miss the SGUARD analyzers on the guards they write. -->
+        <PackageReference Include="SGuard" Version="3.0.0" PrivateAssets="none" />
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.402" PrivateAssets="All" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="SGuard.AspNetCore.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="../../README.md" Pack="true" PackagePath="\" />
+        <None Include="icon.png" Pack="true" PackagePath="\" />
+    </ItemGroup>
+
+</Project>

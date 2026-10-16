@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <!-- Published with Native AOT in CI and run: checks that the handler works without reflection or runtime code
+         generation. Not part of the solution, so the ILCompiler package (whose version follows the SDK) stays out of the
+         lock files. -->
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <PublishAot>true</PublishAot>
+        <InvariantGlobalization>true</InvariantGlobalization>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\src\SGuard.AspNetCore\SGuard.AspNetCore.csproj" />
+    </ItemGroup>
+
+</Project>
