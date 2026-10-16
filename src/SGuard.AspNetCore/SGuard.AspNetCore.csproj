@@ -23,9 +23,10 @@
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <IncludeSymbols>true</IncludeSymbols>
         <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-        <!-- Checks the package's API across target frameworks on every pack. After the first release, set
-             PackageValidationBaselineVersion so a breaking change can't ship by accident. -->
+        <!-- Checks on every pack that the public API stays compatible with the last release, so a breaking change
+             can't ship by accident. -->
         <EnablePackageValidation>true</EnablePackageValidation>
+        <PackageValidationBaselineVersion>1.0.0</PackageValidationBaselineVersion>
     </PropertyGroup>
 
     <!-- Trimming and Native AOT. The analyzers ship in a package whose version follows the installed SDK and so can't be
